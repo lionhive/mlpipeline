@@ -1,0 +1,8 @@
+*.pyc
+.ipynb_checkpoints
+chicago_taxi_output/
+data/eval/local_chicago_taxi_output/
+data/local_tfdv_output/
+data/train/local_chicago_taxi_output/
+taxi/
+tfx_chicago_taxi.egg-info/

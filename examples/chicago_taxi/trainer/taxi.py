@@ -50,10 +50,17 @@ VOCAB_SIZE = 1000
 # Count of out-of-vocab buckets in which unrecognized VOCAB_FEATURES are hashed.
 OOV_SIZE = 10
 
+# N Grams (1,2) = create unigrams and bigrams.
+NGRAM_RANGE = (1,2)
+
 VOCAB_FEATURE_KEYS = [
     'payment_type',
+]
+
+FEATURE_NGRAM = [
     'company',
 ]
+
 
 LABEL_KEY = 'tips'
 FARE_KEY = 'fare'

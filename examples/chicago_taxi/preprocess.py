@@ -18,6 +18,7 @@ from __future__ import print_function
 
 import argparse
 import os
+import sys
 
 import apache_beam as beam
 import tensorflow as tf
@@ -77,8 +78,30 @@ def transform_data(input_handle,
       beam pipeline.
   """
 
+  def transform_ngrams(input, ngram_range):
+    """ helper function to transform ngrams and print output. """
+    # this print statement causes output to concat itself!
+    # input = tf.Print(input, [input], "raw input:", first_n=-1, summarize=100)
+
+    transformed = transform.ngrams(
+      tf.string_split(input, delimiter=" "),
+      ngram_range=ngram_range,
+      separator=' ')
+
+    # SparseTensor basically cannot be printed because it's made up of 3
+    # tensors. We can use this trick to print the values column, but without the index
+    # it's not too meaningful.
+    #
+    # values = tf.Print(transformed.values, [transformed.values], "ngram output:")
+    # transformed = tf.SparseTensor(
+    #       indices=transformed.indices,
+    #       values=values,
+    #       dense_shape=transformed.dense_shape)
+    return transformed
+
   def preprocessing_fn(inputs):
     """tf.transform's callback function for preprocessing inputs.
+    https://cloud.google.com/solutions/machine-learning/data-preprocessing-for-ml-with-tf-transform-pt2
 
     Args:
       inputs: map from feature keys to raw not-yet-transformed features.
@@ -99,6 +122,37 @@ def transform_data(input_handle,
               _fill_in_missing(inputs[key]),
               top_k=taxi.VOCAB_SIZE,
               num_oov_buckets=taxi.OOV_SIZE)
+
+    # for key in taxi.FEATURE_NGRAM:
+    #   # Extract nggrams and build a vocab.
+    #   outputs[
+    #       taxi.transformed_name(key)] = transform.compute_and_apply_vocabulary(
+    #           transform.ngrams(
+    #             tf.string_split(_fill_in_missing(inputs[key])),
+    #             ngram_range=taxi.NGRAM_RANGE,
+    #             separator=' '),
+    #           top_k=512,
+    #           num_oov_buckets=taxi.OOV_SIZE)
+
+    for key in taxi.FEATURE_NGRAM:
+      # Extract nggrams and build a vocab.
+      print('input shiape ##', inputs[key])
+      outputs[
+          taxi.transformed_name(key)] = transform.compute_and_apply_vocabulary(
+            transform_ngrams(_fill_in_missing(inputs[key]), taxi.NGRAM_RANGE),
+            top_k=taxi.VOCAB_SIZE,
+            num_oov_buckets=taxi.OOV_SIZE)
+
+    # for key in taxi.FEATURE_NGRAM:
+    #   # Create embedding
+      # outputs[
+      #     taxi.transformed_name(key) + "_emb"] = transform.embedding(
+      #         transform.ngrams(
+      #           tf.string_split(_fill_in_missing(inputs[key])),
+      #           ngram_range=taxi.NGRAM_RANGE,
+      #           separator=' '),
+      #         top_k=512,
+      #         num_oov_buckets=taxi.OOV_SIZE)
 
     for key in taxi.BUCKET_FEATURE_KEYS:
       outputs[taxi.transformed_name(key)] = transform.bucketize(
