@@ -26,10 +26,6 @@ from tensorflow_transform.tf_metadata import metadata_io
 from trainer import taxi
 
 
-# Optional: For debugging only.
-from tensorflow.python import debug as tf_debug
-sess = tf_debug.LocalCLIDebugWrapperSession(sess)
-
 def build_estimator(tf_transform_dir, config, hidden_units=None):
   """Build an estimator for predicting the tipping behavior of taxi riders.
 
@@ -54,18 +50,20 @@ def build_estimator(tf_transform_dir, config, hidden_units=None):
       tf.feature_column.numeric_column(key, shape=())
       for key in taxi.transformed_names(taxi.DENSE_FLOAT_FEATURE_KEYS)
   ]
-  # Also create an ambedding for the ngrams.
+
+  # Alternate: use this tf hub embedding column which does not require pre-tokeonization
+  # tensorflow/hub/blob/master/tensorflow_hub/feature_column.py
+
+  # Create an ambedding for the ngrams.
+  EMBED_DIMS=32
   real_valued_columns += [
     tf.feature_column.embedding_column(
       tf.feature_column.categorical_column_with_identity(
           key, num_buckets=taxi.VOCAB_SIZE + taxi.OOV_SIZE, default_value=0),
-      32)
+      EMBED_DIMS)
     for key in taxi.transformed_names(taxi.FEATURE_NGRAM)
   ]
-  # New: support ngram features.
-  # we can use: tf.feature_column.embedding_column
-  # or
-  #
+
   categorical_columns = [
       tf.feature_column.categorical_column_with_identity(
           key, num_buckets=taxi.VOCAB_SIZE + taxi.OOV_SIZE, default_value=0)

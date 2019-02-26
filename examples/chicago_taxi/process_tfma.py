@@ -75,7 +75,7 @@ def process_tfma(eval_result_dir,
 
   with beam.Pipeline(argv=pipeline_args) as pipeline:
     if input_csv:
-      csv_coder = taxi.make_csv_coder(schema)
+      csv_coder = taxi.make_csv_coder(schema, input_csv)
       raw_data = (
           pipeline
           | 'ReadFromText' >> beam.io.ReadFromText(

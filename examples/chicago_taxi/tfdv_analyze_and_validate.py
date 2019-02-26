@@ -18,7 +18,7 @@ from __future__ import print_function
 
 import argparse
 
-import apache_beam as beam
+import apache_beam as   beam
 import numpy as np
 import tensorflow as tf
 import tensorflow_data_validation as tfdv
@@ -42,6 +42,12 @@ def infer_schema(stats_path, schema_path):
   schema = tfdv.infer_schema(
       tfdv.load_statistics(stats_path), infer_feature_shape=False)
   print(text_format.MessageToString(schema))
+  print('## Statistics ##')
+  stats = tfdv.load_statistics(stats_path)
+  # print(text_format.MessageToString(stats))
+  for d in stats.datasets:
+    for f in d.features:
+      print(f.name)
 
   print('Writing schema to output path.')
   file_io.write_string_to_file(schema_path, text_format.MessageToString(schema))
@@ -113,6 +119,11 @@ def compute_stats(input_handle,
             coder=beam.coders.ProtoCoder(
                 statistics_pb2.DatasetFeatureStatisticsList)))
 
+# Returns array of column names from csv file.
+def read_csv_header(file):
+  with open(file) as f:
+    first_line = f.readline().rstrip()
+    return first_line.split(',')
 
 def main():
   tf.logging.set_verbosity(tf.logging.INFO)
@@ -161,6 +172,8 @@ def main():
       type=str)
 
   known_args, pipeline_args = parser.parse_known_args()
+  taxi.CSV_COLUMN_NAMES = read_csv_header(known_args.input)
+  # print('read csv header:', taxi.CSV_COLUMN_NAMES)
   compute_stats(
       input_handle=known_args.input,
       stats_path=known_args.stats_path,

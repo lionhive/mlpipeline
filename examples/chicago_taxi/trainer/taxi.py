@@ -24,25 +24,68 @@ from google.protobuf import text_format
 from tensorflow.python.lib.io import file_io
 from tensorflow_metadata.proto.v0 import schema_pb2
 
+import tensorflow_data_validation as tfdv
+
 # Categorical features are assumed to each have a maximum value in the dataset.
 MAX_CATEGORICAL_FEATURE_VALUES = [24, 31, 12]
 
-# TODO(b/114589822): Infer these and other properties from the schema.
-CATEGORICAL_FEATURE_KEYS = [
-    'trip_start_hour', 'trip_start_day', 'trip_start_month',
-    'pickup_census_tract', 'dropoff_census_tract', 'pickup_community_area',
-    'dropoff_community_area'
-]
+# Types used for mapping input columns to TFT columns.
+COL_TYPE_DENSE_FLOAT='dense_float'
+COL_TYPE_CATEGORICAL='categorical'
+COL_TYPE_BUCKET='bucket'
+COL_TYPE_VOCAB='vocab'
+COL_TYPE_NGRAM='ngram'
+COL_TYPE_IGNORE='ignore'
 
-DENSE_FLOAT_FEATURE_KEYS = ['trip_miles', 'fare', 'trip_seconds']
+# Automatic schema inference can be overridden here.
+SCHEMA_OVERRIDE = {
+  # Dense float
+  # 'trip_miles': COL_TYPE_DENSE_FLOAT,
+  # 'fare': COL_TYPE_DENSE_FLOAT,
+  # 'trip_seconds': COL_TYPE_DENSE_FLOAT,
+
+  # Bucket features
+  'pickup_latitude': COL_TYPE_BUCKET,
+  'pickup_longitude': COL_TYPE_BUCKET,
+  'dropoff_latitude': COL_TYPE_BUCKET,
+  'dropoff_longitude': COL_TYPE_BUCKET,
+
+  'trip_start_hour': COL_TYPE_CATEGORICAL,
+  'trip_start_day': COL_TYPE_CATEGORICAL,
+  'trip_start_month': COL_TYPE_CATEGORICAL,
+  'pickup_census_tract': COL_TYPE_CATEGORICAL,
+  'dropoff_census_tract': COL_TYPE_CATEGORICAL,
+  'pickup_community_area': COL_TYPE_CATEGORICAL,
+  'dropoff_community_area': COL_TYPE_CATEGORICAL,
+
+  'pickup_latitude': COL_TYPE_BUCKET,
+  'pickup_longitude': COL_TYPE_BUCKET,
+  'dropoff_latitude': COL_TYPE_BUCKET,
+  'dropoff_longitude': COL_TYPE_BUCKET,
+
+  # 'payment_type': COL_TYPE_VOCAB,
+  # 'company': COL_TYPE_NGRAM,
+
+  'trip_start_timestamp': COL_TYPE_IGNORE,
+  'tips': COL_TYPE_IGNORE,
+}
+
+# TODO(b/114589822): Infer these and other properties from the schema.
+CATEGORICAL_FEATURE_KEYS = []
+#   'trip_start_hour', 'trip_start_day', 'trip_start_month',
+#   'pickup_census_tract', 'dropoff_census_tract', 'pickup_community_area',
+#   'dropoff_community_area'
+# ]
+
+DENSE_FLOAT_FEATURE_KEYS = [] #'trip_miles', 'fare', 'trip_seconds']
 
 # Number of buckets used by tf.transform for encoding each feature.
 FEATURE_BUCKET_COUNT = 10
 
-BUCKET_FEATURE_KEYS = [
-    'pickup_latitude', 'pickup_longitude', 'dropoff_latitude',
-    'dropoff_longitude'
-]
+BUCKET_FEATURE_KEYS = []
+#   'pickup_latitude', 'pickup_longitude', 'dropoff_latitude',
+#   'dropoff_longitude'
+# ]
 
 # Number of vocabulary terms used for encoding VOCAB_FEATURES by tf.transform
 VOCAB_SIZE = 1000
@@ -53,38 +96,88 @@ OOV_SIZE = 10
 # N Grams (1,2) = create unigrams and bigrams.
 NGRAM_RANGE = (1,2)
 
-VOCAB_FEATURE_KEYS = [
-    'payment_type',
-]
+VOCAB_FEATURE_KEYS = []
+#     'payment_type',
+# ]
 
-FEATURE_NGRAM = [
-    'company',
-]
-
+FEATURE_NGRAM = []
+#     'company',
+# ]
 
 LABEL_KEY = 'tips'
 FARE_KEY = 'fare'
 
-CSV_COLUMN_NAMES = [
-    'pickup_community_area',
-    'fare',
-    'trip_start_month',
-    'trip_start_hour',
-    'trip_start_day',
-    'trip_start_timestamp',
-    'pickup_latitude',
-    'pickup_longitude',
-    'dropoff_latitude',
-    'dropoff_longitude',
-    'trip_miles',
-    'pickup_census_tract',
-    'dropoff_census_tract',
-    'payment_type',
-    'company',
-    'trip_seconds',
-    'dropoff_community_area',
-    'tips',
-]
+TYPE_TO_COLUMN = {
+  COL_TYPE_DENSE_FLOAT: DENSE_FLOAT_FEATURE_KEYS,
+  COL_TYPE_CATEGORICAL: CATEGORICAL_FEATURE_KEYS,
+  COL_TYPE_BUCKET:      BUCKET_FEATURE_KEYS,
+  COL_TYPE_VOCAB:       VOCAB_FEATURE_KEYS,
+  COL_TYPE_NGRAM:       FEATURE_NGRAM,
+  COL_TYPE_IGNORE:      None,
+}
+
+# Helper, prints built column lists.
+def print_column_list():
+  print('## COLUMN LISTS ##')
+  for key in TYPE_TO_COLUMN:
+    print(key, TYPE_TO_COLUMN[key])
+  print()
+
+# Adds column name to column list by type.
+# type: column type (see TYPE_TO_COLUMN table)
+# name: column name
+def add_to_column_list(column_type, column_name):
+  assert(column_type in TYPE_TO_COLUMN)
+  print('#ADD COLUMN:', column_name, column_type)
+  if TYPE_TO_COLUMN[column_type] == None:
+    return
+
+  TYPE_TO_COLUMN[column_type] += [column_name]
+
+# Adds column to clumn list, infers a default type from schema.
+def add_column_infer_type(feature):
+  # These fields are defined in the schema proto, but python isn't reading it.
+  BYTES=1
+  INT=2
+  FLOAT=3
+
+  global COL_TYPE_DENSE_FLOAT, COL_TYPE_CATEGORICAL, COL_TYPE_BUCKET
+  global COL_TYPE_VOCAB, COL_TYPE_NGRAM, COL_TYPE_IGNORE
+
+  # By default, map bytes to STRING
+  if feature.type == BYTES:
+    if feature.domain:
+      add_to_column_list(COL_TYPE_VOCAB, feature.name)
+    else:
+      add_to_column_list(COL_TYPE_NGRAM, feature.name)
+  elif feature.type == INT:
+    add_to_column_list(COL_TYPE_BUCKET, feature.name)
+  elif feature.type == FLOAT:
+    add_to_column_list(COL_TYPE_DENSE_FLOAT, feature.name)
+  else:
+    print('ERROR! feaeture type not handled:', feature)
+
+
+CSV_COLUMN_NAMES = []
+#     'pickup_community_area',
+#     'fare',
+#     'trip_start_month',
+#     'trip_start_hour',
+#     'trip_start_day',
+#     'trip_start_timestamp',
+#     'pickup_latitude',
+#     'pickup_longitude',
+#     'dropoff_latitude',
+#     'dropoff_longitude',
+#     'trip_miles',
+#     'pickup_census_tract',
+#     'dropoff_census_tract',
+#     'payment_type',
+#     'company',
+#     'trip_seconds',
+#     'dropoff_community_area',
+#     'tips',
+# ]
 
 
 def transformed_name(key):
@@ -103,13 +196,28 @@ def get_raw_feature_spec(schema):
 def make_proto_coder(schema):
   raw_feature_spec = get_raw_feature_spec(schema)
   raw_schema = dataset_schema.from_feature_spec(raw_feature_spec)
+  print('raw_feature_spec', raw_feature_spec)
+  print('raw_schema', raw_schema)
+
+  infer_columns_from_schema(schema)
   return tft_coders.ExampleProtoCoder(raw_schema)
 
 
-def make_csv_coder(schema):
+# Returns array of column names from csv file.
+def read_csv_header(file):
+  with open(file) as f:
+    first_line = f.readline().rstrip()
+    return first_line.split(',')
+
+def make_csv_coder(schema, filename):
   """Return a coder for tf.transform to read csv files."""
   raw_feature_spec = get_raw_feature_spec(schema)
+  CSV_COLUMN_NAMES = read_csv_header(filename)
+
   parsing_schema = dataset_schema.from_feature_spec(raw_feature_spec)
+  # print('schema', schema)
+  # print('raw_feature_spec', raw_feature_spec)
+  print('parsing_schema', parsing_schema)
   return tft_coders.CsvCoder(CSV_COLUMN_NAMES, parsing_schema)
 
 
@@ -173,6 +281,18 @@ def make_sql(table_name, max_rows=None, for_eval=False):
     table_name=table_name, where_clause=where_clause, limit_clause=limit_clause)
 
 
+def build_statistics_map():
+  print('## Building Statistics ##')
+  stats_path='/Users/tvykruta/Documents/src/tfx/examples/chicago_taxi/data/local_tfdv_output/eval_stats.tfrecord'
+  stats = tfdv.load_statistics(stats_path)
+  # print(text_format.MessageToString(stats))
+  statistics_map = {}
+  for d in stats.datasets:
+    for f in d.features:
+      print(f.name)
+      statistics_map[f.name] = f
+  return statistics_map
+
 def read_schema(path):
   """Reads a schema from the provided location.
 
@@ -182,7 +302,23 @@ def read_schema(path):
   Returns:
     An instance of Schema or None if the input argument is None
   """
+  print('*** Schema Generation ***')
   result = schema_pb2.Schema()
   contents = file_io.read_file_to_string(path)
   text_format.Parse(contents, result)
+
+#  stats_map = build_statistics_map()
+
+  print('### Inferring Features from Schema ###')
+  for feature in result.feature:
+    if feature.presence.min_count == 0:
+      print('Dropping feature with min_count=0:', feature.name)
+    elif feature.name in SCHEMA_OVERRIDE:
+      print('override schema:', feature.name)
+      add_to_column_list(SCHEMA_OVERRIDE[feature.name], feature.name)
+    else:
+      print('inferring type for', feature.name)
+      add_column_infer_type(feature)
+
+  print_column_list()
   return result

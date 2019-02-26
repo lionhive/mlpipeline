@@ -91,7 +91,7 @@ def _do_inference(model_handle, examples_file, num_examples, schema):
   del schema.feature[:]
   schema.feature.extend(filtered_features)
 
-  csv_coder = taxi.make_csv_coder(schema)
+  csv_coder = taxi.make_csv_coder(schema, examples_file)
   proto_coder = taxi.make_proto_coder(schema)
 
   input_file = open(examples_file, 'r')

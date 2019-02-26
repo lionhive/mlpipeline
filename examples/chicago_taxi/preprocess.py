@@ -111,6 +111,8 @@ def transform_data(input_handle,
     """
     outputs = {}
     for key in taxi.DENSE_FLOAT_FEATURE_KEYS:
+      print('processing key', key)
+      print('input:', inputs[key])
       # Preserve this feature as a dense float, setting nan's to the mean.
       outputs[taxi.transformed_name(key)] = transform.scale_to_z_score(
           _fill_in_missing(inputs[key]))
@@ -136,23 +138,11 @@ def transform_data(input_handle,
 
     for key in taxi.FEATURE_NGRAM:
       # Extract nggrams and build a vocab.
-      print('input shiape ##', inputs[key])
       outputs[
           taxi.transformed_name(key)] = transform.compute_and_apply_vocabulary(
             transform_ngrams(_fill_in_missing(inputs[key]), taxi.NGRAM_RANGE),
             top_k=taxi.VOCAB_SIZE,
             num_oov_buckets=taxi.OOV_SIZE)
-
-    # for key in taxi.FEATURE_NGRAM:
-    #   # Create embedding
-      # outputs[
-      #     taxi.transformed_name(key) + "_emb"] = transform.embedding(
-      #         transform.ngrams(
-      #           tf.string_split(_fill_in_missing(inputs[key])),
-      #           ngram_range=taxi.NGRAM_RANGE,
-      #           separator=' '),
-      #         top_k=512,
-      #         num_oov_buckets=taxi.OOV_SIZE)
 
     for key in taxi.BUCKET_FEATURE_KEYS:
       outputs[taxi.transformed_name(key)] = transform.bucketize(
@@ -182,7 +172,7 @@ def transform_data(input_handle,
   with beam.Pipeline(argv=pipeline_args) as pipeline:
     with tft_beam.Context(temp_dir=working_dir):
       if input_handle.lower().endswith('csv'):
-        csv_coder = taxi.make_csv_coder(schema)
+        csv_coder = taxi.make_csv_coder(schema, input_handle.lower())
         raw_data = (
             pipeline
             | 'ReadFromText' >> beam.io.ReadFromText(
@@ -271,6 +261,11 @@ def main():
       transform_dir=known_args.transform_dir,
       max_rows=known_args.max_rows,
       pipeline_args=pipeline_args)
+
+  # try debugging
+  graph = tf.get_default_graph() # Get the current (default) graph
+  ops = graph.get_operations() # List all the TF ops in the graph
+  print("#tv ops:", ops)
 
 
 if __name__ == '__main__':
