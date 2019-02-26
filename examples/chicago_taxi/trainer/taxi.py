@@ -133,6 +133,10 @@ def add_to_column_list(column_type, column_name):
     return
 
   TYPE_TO_COLUMN[column_type] += [column_name]
+  # Encode UTC to UTF-8
+  # TODO(tvykruta): This is inefficient to do every append, move outside.
+  # Or better, encode the schema file Features as UTF8 when reading.
+  TYPE_TO_COLUMN[column_type] = [x.encode('utf-8') for x in TYPE_TO_COLUMN[column_type]]
 
 # Adds column to clumn list, infers a default type from schema.
 def add_column_infer_type(feature):
@@ -199,7 +203,6 @@ def make_proto_coder(schema):
   print('raw_feature_spec', raw_feature_spec)
   print('raw_schema', raw_schema)
 
-  infer_columns_from_schema(schema)
   return tft_coders.ExampleProtoCoder(raw_schema)
 
 

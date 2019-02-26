@@ -45,6 +45,7 @@ def train_and_maybe_evaluate(hparams):
   Returns:
     The estimator that was used for training (and maybe eval)
   """
+  print('### Train and Maybe Evaluate ###')
   schema = taxi.read_schema(hparams.schema_file)
 
   train_input = lambda: model.input_fn(
